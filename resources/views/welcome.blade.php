@@ -105,7 +105,6 @@
                                     </div>
                                 </div>
                             </div>
-
                         </div>
 
                     </div>
@@ -136,8 +135,6 @@
                 }
             });
 
-
-            var keyValueArray = [];
             const settings = {
                 async: true,
                 crossDomain: true,
@@ -154,98 +151,141 @@
             $.ajax(settings).done(function(response) {
                 var prayerTimes = response.items[0];
                 var isFirstItem = true;
+                var prayerTimesArray = [];
 
                 for (var key in prayerTimes) {
-                    if (prayerTimes.hasOwnProperty(key)) {
-                        if (isFirstItem) {
-                            isFirstItem = false;
-                            continue; // Skip the first key-value pair
-                        }
-
-                        prayerTimesArray.push({
-                            key: key,
-                            value: prayerTimes[key]
-                        });
+                    if (prayerTimes.hasOwnProperty(key) && !isFirstItem) {
+                        prayerTimesArray.push(prayerTimes[key]);
                     }
+                    isFirstItem = false;
                 }
-
                 updatePrayerElements(prayerTimesArray);
+                var convertedTimesArray = convertTo24HourFormat(prayerTimesArray);
 
-                var upcomingPrayerInfo = findUpcomingPrayer(prayerTimesArray);
 
+                var nextTime = findNextTime(convertedTimesArray);
+                var prayerName = getPrayerName(convertedTimesArray, nextTime.time);
+                console.log(prayerName);
+                console.log(nextTime);
+
+                //  var convertedTime12hr = convertTo12HourFormat(nextTime);
+                var timeDifference = calculateTimeDifference(nextTime.time, nextTime.isNextDay);
+                updateClock(prayerName, timeDifference.hours + " : " + timeDifference.minutes);
             });
 
-            function updatePrayerElements(prayerTimesArray) {
-                for (var i = 0; i < prayerTimesArray.length; i++) {
-                    var key = prayerTimesArray[i].key;
-                    var value = prayerTimesArray[i].value;
-                    $("#" + key).text(value);
+            function calculateTimeDifference(inputTime, isNextDay) {
+                var inputHours = parseInt(inputTime.split(':')[0], 10);
+                var inputMinutes = parseInt(inputTime.split(':')[1], 10);
+
+                var currentDate = new Date();
+                var currentHours = currentDate.getHours();
+                var currentMinutes = currentDate.getMinutes();
+
+                // Convert current time to minutes for easier comparison
+                var currentTimeInMinutes = currentHours * 60 + currentMinutes;
+                var inputTimeInMinutes = inputHours * 60 + inputMinutes;
+                if (isNextDay) {
+                    inputTimeInMinutes += 24 * 60;
                 }
+                // Calculate the time difference in minutes
+                var timeDifferenceInMinutes = inputTimeInMinutes - currentTimeInMinutes;
+
+                // Convert the time difference back to hours and minutes
+                var hoursDifference = Math.floor(timeDifferenceInMinutes / 60);
+                var minutesDifference = timeDifferenceInMinutes % 60;
+
+                return {
+                    hours: hoursDifference,
+                    minutes: minutesDifference
+                };
             }
 
+            function findNextTime(timesArray) {
+                var currentDate = new Date();
+                var currentHours = currentDate.getHours();
+                var currentMinutes = currentDate.getMinutes();
 
-            function findUpcomingPrayer(prayerTimesArray) {
-                var currentTime = new Date();
-                var upcomingPrayerTime;
-                var upcomingPrayerName;
+                // Ensure current hours and minutes are in two-digit format
+                currentHours = currentHours < 10 ? '0' + currentHours : currentHours;
+                currentMinutes = currentMinutes < 10 ? '0' + currentMinutes : currentMinutes;
 
-                for (var i = 0; i < prayerTimesArray.length; i++) {
-                    var prayerTime = new Date(prayerTimesArray[i].value);
-
-                    // Check if the prayer time is in the future
-                    if (prayerTime > currentTime) {
-                        upcomingPrayerTime = prayerTime;
-                        upcomingPrayerName = prayerTimesArray[i].key;
+                // Current time in HH:mm format
+                var currentTime = currentHours + ':' + currentMinutes;
+                var nextDay = false;
+                // Find the next upcoming time from the timesArray
+                var nextTime = null;
+                for (var i = 0; i < timesArray.length; i++) {
+                    if (timesArray[i] > currentTime) {
+                        nextTime = timesArray[i];
                         break;
                     }
                 }
+                if (!nextTime) {
+                    nextTime = timesArray[0];
+                    nextDay = true;
+                }
 
-                if (upcomingPrayerTime) {
-                    var timeDifference = upcomingPrayerTime - currentTime;
-                    var hoursRemaining = Math.floor(timeDifference / (1000 * 60 * 60));
-                    var minutesRemaining = Math.floor((timeDifference % (1000 * 60 * 60)) / (1000 * 60));
-                    var secondsRemaining = Math.floor((timeDifference % (1000 * 60)) / 1000);
-                    time
-                    console.log("Upcoming Prayer: " + upcomingPrayerName);
-                    console.log("Time remaining: " + hoursRemaining + "h " + minutesRemaining + "m " +
-                        secondsRemaining + "s");
-                } else {
-                    //calculate esha to fajr difference
-                    var currentTime = new Date();
-                    var currentHours = currentTime.getHours();
-                    var currentMinutes = currentTime.getMinutes();
-
-                    var currentTimeInMin = currentHours * 60 + currentMinutes;
-                    var nextDayFajr = convertToMinutes(prayerTimesArray[0].value);
-
-
-                    var remainingTime = nextDayFajr - currentTimeInMin + (24 * 60);
-                    // Convert remaining time back to hours and minutes
-                    var remainingHours = Math.floor(remainingTime / 60);
-                    var remainingMinutes = remainingTime % 60;
-
-                    // Add leading zeros if necessary
-                    if (remainingHours < 10) {
-                        remainingHours = "0" + remainingHours;
-                    }
-
-                    if (remainingMinutes < 10) {
-                        remainingMinutes = "0" + remainingMinutes;
-                    }
-
-                    // Create the formatted time string
-                    var time = remainingHours + " : " + remainingMinutes;
-
-                    updateClock("Fajr : ", time);
+                return {
+                    time: nextTime,
+                    isNextDay: nextDay
                 }
             }
 
+            function getPrayerName(timesArray, specificTime) {
+                var prayerNames = ['Fajr', 'Shurooq', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
-            function convertToMinutes(timeString) {
-                var timeArray = timeString.split(":");
-                var hours = parseInt(timeArray[0], 10);
-                var minutes = parseInt(timeArray[1], 10);
-                return hours * 60 + minutes;
+                // Find the index of the specific time in the timesArray
+                var timeIndex = timesArray.indexOf(specificTime);
+
+                // Determine the prayer name based on the time index
+                var prayerName = 'Unknown';
+                if (timeIndex >= 0 && timeIndex < prayerNames.length) {
+                    prayerName = prayerNames[timeIndex];
+                }
+
+                return prayerName;
+            }
+
+            function convertTo24HourFormat(timeArray) {
+                var convertedArray = [];
+
+                for (var i = 0; i < timeArray.length; i++) {
+                    var time12hr = timeArray[i];
+                    var [time, period] = time12hr.split(' ');
+                    var [hours, minutes] = time.split(':');
+
+                    hours = parseInt(hours, 10);
+                    minutes = parseInt(minutes, 10);
+
+                    if (period === 'pm' || period === 'PM') {
+                        if (hours !== 12) {
+                            hours += 12;
+                        }
+                    } else {
+                        if (hours === 12) {
+                            hours = 0;
+                        }
+                    }
+
+                    // Ensure hours and minutes are in two-digit format
+                    hours = hours < 10 ? '0' + hours : hours;
+                    minutes = minutes < 10 ? '0' + minutes : minutes;
+
+                    // Construct the time string in 24-hour format
+                    var time24hr = hours + ':' + minutes;
+                    convertedArray.push(time24hr);
+                }
+
+                return convertedArray;
+            }
+
+            function updatePrayerElements(prayerTimesArray) {
+
+                var prayerIds = ['fajr', 'shurooq', 'dhuhr', 'asr', 'maghrib', 'isha'];
+
+                for (var i = 0; i < prayerTimesArray.length; i++) {
+                    $("#" + prayerIds[i]).text(prayerTimesArray[i]);
+                }
             }
 
             function updateClock(prayername, timeString) {
@@ -280,16 +320,13 @@
                     var Seconds = seconds < 10 ? "0" + seconds : seconds;
 
                     // Update the clock display
-                    $("#time").text(prayername + Hours + " : " + Minutes + " : " + Seconds);
+                    $("#time").text(prayername + "- " + Hours + " : " + Minutes + " : " + Seconds);
 
                 }, 1000); // Update every second (1000 milliseconds)
 
                 // Initial seconds
                 var seconds = 0;
             }
-
-
-
 
         });
     </script>
